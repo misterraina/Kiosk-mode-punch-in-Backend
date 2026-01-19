@@ -1,0 +1,3 @@
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+
+export default JWT_SECRET;
