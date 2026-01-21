@@ -1,8 +1,6 @@
 import { Router, Request, Response } from 'express';
 import pool from '../../config/database';
 import authenticateAdmin from '../../middleware/adminAuth';
-import jwt from 'jsonwebtoken';
-import JWT_SECRET from '../../config/jwt';
 import crypto from 'crypto';
 
 const router = Router();
@@ -147,16 +145,8 @@ router.post('/activate', authenticateAdmin, async (req: Request, res: Response) 
             [device.id]
         );
 
-        // Generate device token
-        const deviceToken = jwt.sign(
-            { deviceId: device.id, deviceCode: device.devicecode },
-            JWT_SECRET,
-            { expiresIn: '365d' } // Long-lived token for devices
-        );
-
         res.json({
             message: 'Device activated successfully',
-            deviceToken,
             device: {
                 id: device.id,
                 deviceCode: device.devicecode,
@@ -322,16 +312,8 @@ router.post('/activate-with-code', async (req: Request, res: Response) => {
             [codeRecord.id]
         );
 
-        // Generate device token
-        const deviceToken = jwt.sign(
-            { deviceId: device.id, deviceCode: device.devicecode },
-            JWT_SECRET,
-            { expiresIn: '365d' }
-        );
-
         res.json({
             message: 'Device activated successfully',
-            deviceToken,
             device: {
                 id: device.id,
                 deviceCode: device.devicecode,

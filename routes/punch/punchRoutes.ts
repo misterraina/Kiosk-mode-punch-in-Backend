@@ -1,24 +1,20 @@
 import { Router, Request, Response } from 'express';
 import pool from '../../config/database';
-import authenticateDevice, { DeviceRequest } from '../../middleware/deviceAuth';
 
 const router = Router();
 
 interface PunchInRequest {
   userId: number;
+  deviceId?: number;
 }
 
-// Punch in endpoint (device authenticated)
-router.post('/in', authenticateDevice, async (req: DeviceRequest, res: Response) => {
+// Punch in endpoint (unified for kiosk and remote)
+router.post('/in', async (req: Request, res: Response) => {
     try {
-        const { userId }: PunchInRequest = req.body;
+        const { userId, deviceId }: PunchInRequest = req.body;
 
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required' });
-        }
-
-        if (!req.device) {
-            return res.status(401).json({ error: 'Device authentication failed' });
         }
 
         // Check if user exists and is active
@@ -29,6 +25,33 @@ router.post('/in', authenticateDevice, async (req: DeviceRequest, res: Response)
 
         if (userResult.rows.length === 0) {
             return res.status(404).json({ error: 'User not found or not active' });
+        }
+
+        // If deviceId is provided, validate device exists and is active
+        let device = null;
+        if (deviceId) {
+            const deviceResult = await pool.query(
+                'SELECT * FROM device WHERE id = $1 AND isActive = $2',
+                [deviceId, true]
+            );
+
+            if (deviceResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Device not found or not active' });
+            }
+
+            device = {
+                id: deviceResult.rows[0].id,
+                deviceCode: deviceResult.rows[0].devicecode,
+                location: deviceResult.rows[0].location,
+                isActive: deviceResult.rows[0].isactive,
+                lastSeenAt: deviceResult.rows[0].lastseenat
+            };
+
+            // Update device last seen
+            await pool.query(
+                'UPDATE device SET lastSeenAt = CURRENT_TIMESTAMP WHERE id = $1',
+                [deviceId]
+            );
         }
 
         // Check if user already has an open punch
@@ -45,7 +68,7 @@ router.post('/in', authenticateDevice, async (req: DeviceRequest, res: Response)
         const result = await pool.query(
             `INSERT INTO punchRecords (userId, deviceId, punchInAt, status, createdAt) 
              VALUES ($1, $2, CURRENT_TIMESTAMP, 'OPEN', CURRENT_TIMESTAMP) RETURNING *`,
-            [userId, req.device.id]
+            [userId, deviceId || null]
         );
 
         const punchRecord = result.rows[0];
@@ -71,7 +94,8 @@ router.post('/in', authenticateDevice, async (req: DeviceRequest, res: Response)
                 faceProfileId: user.faceprofileid,
                 createdAt: user.createdat
             },
-            device: req.device
+            device: device,
+            mode: deviceId ? 'KIOSK' : 'REMOTE'
         });
     } catch (error: any) {
         console.error('POST /api/punch/in error:', error);
@@ -79,17 +103,40 @@ router.post('/in', authenticateDevice, async (req: DeviceRequest, res: Response)
     }
 });
 
-// Punch out endpoint (device authenticated)
-router.post('/out', authenticateDevice, async (req: DeviceRequest, res: Response) => {
+// Punch out endpoint (unified for kiosk and remote)
+router.post('/out', async (req: Request, res: Response) => {
     try {
-        const { userId }: PunchInRequest = req.body;
+        const { userId, deviceId }: PunchInRequest = req.body;
 
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required' });
         }
 
-        if (!req.device) {
-            return res.status(401).json({ error: 'Device authentication failed' });
+        // If deviceId is provided, validate device exists and is active
+        let device = null;
+        if (deviceId) {
+            const deviceResult = await pool.query(
+                'SELECT * FROM device WHERE id = $1 AND isActive = $2',
+                [deviceId, true]
+            );
+
+            if (deviceResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Device not found or not active' });
+            }
+
+            device = {
+                id: deviceResult.rows[0].id,
+                deviceCode: deviceResult.rows[0].devicecode,
+                location: deviceResult.rows[0].location,
+                isActive: deviceResult.rows[0].isactive,
+                lastSeenAt: deviceResult.rows[0].lastseenat
+            };
+
+            // Update device last seen
+            await pool.query(
+                'UPDATE device SET lastSeenAt = CURRENT_TIMESTAMP WHERE id = $1',
+                [deviceId]
+            );
         }
 
         // Find open punch record for this user
@@ -126,7 +173,8 @@ router.post('/out', authenticateDevice, async (req: DeviceRequest, res: Response
                 status: updatedRecord.status,
                 createdAt: updatedRecord.createdat
             },
-            device: req.device
+            device: device,
+            mode: deviceId ? 'KIOSK' : 'REMOTE'
         });
     } catch (error: any) {
         console.error('POST /api/punch/out error:', error);
@@ -141,7 +189,7 @@ router.get('/user/:userId', async (req: Request, res: Response) => {
         const { page = 1, limit = 10, status } = req.query;
         const offset = (Number(page) - 1) * Number(limit);
 
-        let query = 'SELECT pr.*, u.name as userName, u.employeeCode, d.deviceCode, d.location FROM punchRecords pr JOIN "user" u ON pr.userId = u.id JOIN device d ON pr.deviceId = d.id WHERE pr.userId = $1';
+        let query = 'SELECT pr.*, u.name as userName, u.employeeCode, d.deviceCode, d.location FROM punchRecords pr JOIN "user" u ON pr.userId = u.id LEFT JOIN device d ON pr.deviceId = d.id WHERE pr.userId = $1';
         let countQuery = 'SELECT COUNT(*) FROM punchRecords WHERE userId = $1';
         const params: any[] = [userId];
 

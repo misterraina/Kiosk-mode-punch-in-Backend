@@ -49,7 +49,7 @@ async function migrate() {
             CREATE TABLE IF NOT EXISTS punchRecords (
                 id SERIAL PRIMARY KEY,
                 userId INTEGER REFERENCES "user"(id),
-                deviceId INTEGER REFERENCES device(id),
+                deviceId INTEGER REFERENCES device(id) NULL,
                 punchInAt TIMESTAMP NOT NULL,
                 punchOutAt TIMESTAMP,
                 durationMinutes INTEGER GENERATED ALWAYS AS (

@@ -16,10 +16,10 @@ http://localhost:3000
 - **Used for**: Admin-only operations (device/user management)
 - **Get token from**: `/api/admin/login`
 
-### 2. Device Authentication  
-- **Header**: `X-Device-Token: {{DEVICE_TOKEN}}`
-- **Used for**: Punch operations
-- **Get token from**: `/api/devices/activate`
+### 2. Punch Operations
+- **No Authentication Required**
+- **Used for**: Both kiosk and remote punch operations
+- **Mode Detection**: Automatically determined by presence of `deviceId` in request body
 
 ---
 
@@ -126,7 +126,6 @@ Authorization: Bearer {{ADMIN_TOKEN}}
 ```json
 {
     "message": "Device activated successfully",
-    "deviceToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "device": {
         "id": 1,
         "deviceCode": "DEV001",
@@ -135,6 +134,8 @@ Authorization: Bearer {{ADMIN_TOKEN}}
     }
 }
 ```
+
+**Note:** Device activation no longer returns a JWT token. The `deviceId` should be configured in the kiosk app settings for use in punch operations.
 
 ### Deactivate Device (Admin Only)
 ```
@@ -174,7 +175,6 @@ Content-Type: application/json
 ```json
 {
     "message": "Device activated successfully",
-    "deviceToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "device": {
         "id": 1,
         "deviceCode": "DEV001",
@@ -183,6 +183,8 @@ Content-Type: application/json
     }
 }
 ```
+
+**Note:** Device activation no longer returns a JWT token. Use the device `id` from the response to configure the kiosk app.
 
 **Error Responses:**
 
@@ -207,7 +209,7 @@ Content-Type: application/json
 }
 ```
 
-**Note:** This endpoint does not require authentication. The activation code serves as the authentication mechanism. Codes are single-use and expire after 24 hours.
+**Note:** This endpoint does not require authentication. The activation code serves as the authentication mechanism. Codes are single-use and expire after 24 hours. After activation, configure the returned device `id` in your kiosk app settings.
 
 ---
 
@@ -273,18 +275,30 @@ Authorization: Bearer {{ADMIN_TOKEN}}
 
 ## Punch Operations APIs
 
-### Punch In (Device Authenticated)
+### Punch In (Unified - Kiosk & Remote)
+
+**Kiosk Mode (with device):**
 ```
 POST /api/punch/in
 Content-Type: application/json
-X-Device-Token: {{DEVICE_TOKEN}}
+
+{
+    "userId": 1,
+    "deviceId": 1
+}
+```
+
+**Remote Mode (without device):**
+```
+POST /api/punch/in
+Content-Type: application/json
 
 {
     "userId": 1
 }
 ```
 
-**Response (201):**
+**Response (201) - Kiosk Mode:**
 ```json
 {
     "message": "Punch in successful",
@@ -312,22 +326,62 @@ X-Device-Token: {{DEVICE_TOKEN}}
         "location": "Main Entrance",
         "isActive": true,
         "lastSeenAt": "2026-01-15T12:30:00.000Z"
-    }
+    },
+    "mode": "KIOSK"
 }
 ```
 
-### Punch Out (Device Authenticated)
+**Response (201) - Remote Mode:**
+```json
+{
+    "message": "Punch in successful",
+    "punchRecord": {
+        "id": 2,
+        "userId": 1,
+        "deviceId": null,
+        "punchInAt": "2026-01-15T12:30:00.000Z",
+        "punchOutAt": null,
+        "durationMinutes": null,
+        "status": "OPEN",
+        "createdAt": "2026-01-15T12:30:00.000Z"
+    },
+    "user": {
+        "id": 1,
+        "employeeCode": "EMP001",
+        "name": "John Doe",
+        "status": "ACTIVE",
+        "faceProfileId": null,
+        "createdAt": "2026-01-15T12:00:00.000Z"
+    },
+    "device": null,
+    "mode": "REMOTE"
+}
+```
+
+### Punch Out (Unified - Kiosk & Remote)
+
+**Kiosk Mode (with device):**
 ```
 POST /api/punch/out
 Content-Type: application/json
-X-Device-Token: {{DEVICE_TOKEN}}
+
+{
+    "userId": 1,
+    "deviceId": 1
+}
+```
+
+**Remote Mode (without device):**
+```
+POST /api/punch/out
+Content-Type: application/json
 
 {
     "userId": 1
 }
 ```
 
-**Response (200):**
+**Response (200) - Kiosk Mode:**
 ```json
 {
     "message": "Punch out successful",
@@ -347,7 +401,27 @@ X-Device-Token: {{DEVICE_TOKEN}}
         "location": "Main Entrance",
         "isActive": true,
         "lastSeenAt": "2026-01-15T17:45:00.000Z"
-    }
+    },
+    "mode": "KIOSK"
+}
+```
+
+**Response (200) - Remote Mode:**
+```json
+{
+    "message": "Punch out successful",
+    "punchRecord": {
+        "id": 2,
+        "userId": 1,
+        "deviceId": null,
+        "punchInAt": "2026-01-15T12:30:00.000Z",
+        "punchOutAt": "2026-01-15T17:45:00.000Z",
+        "durationMinutes": 315,
+        "status": "CLOSED",
+        "createdAt": "2026-01-15T12:30:00.000Z"
+    },
+    "device": null,
+    "mode": "REMOTE"
 }
 ```
 
@@ -395,16 +469,7 @@ GET /api/punch/user/1?page=1&limit=10&status=OPEN
 ```
 
 #### 401 Unauthorized
-```json
-{
-    "error": "Device token required"
-}
-```
-```json
-{
-    "error": "Invalid device token"
-}
-```
+*Not applicable - punch endpoints do not require authentication*
 
 #### 404 Not Found
 ```json
@@ -431,9 +496,11 @@ GET /api/punch/user/1?page=1&limit=10&status=OPEN
 
 ```json
 {
-    "error": "Device is not active"
+    "error": "Device not found or not active"
 }
 ```
+
+**Note:** This error only occurs in kiosk mode when `deviceId` is provided but invalid.
 
 ### Device Management Specific Errors
 
@@ -461,30 +528,27 @@ GET /api/punch/user/1?page=1&limit=10&status=OPEN
 
 ### Complete Testing Sequence
 
-#### Option 1: Using Activation Code (Recommended)
+#### Remote Mode Testing (Simplest)
 1. **Admin Login** → Get `ADMIN_TOKEN`
-2. **Create Device** → Get `ACTIVATION_CODE` (e.g., `DEV001-A3F2B8C1`)
-3. **Activate Device with Code** → Get `DEVICE_TOKEN` (no admin auth needed)
-4. **Create User** → Get `USER_ID`
-5. **Punch In** → Using `DEVICE_TOKEN` and `USER_ID`
-6. **Punch Out** → Close the punch session
+2. **Create User** → Get `USER_ID`
+3. **Punch In (Remote)** → Using only `USER_ID` (no device needed)
+4. **Punch Out (Remote)** → Close the punch session
 
-#### Option 2: Using Admin Token (Legacy)
+#### Kiosk Mode Testing
 1. **Admin Login** → Get `ADMIN_TOKEN`
-2. **Create Device** → Device created with `isActive: false`
-3. **Activate Device** → Get `DEVICE_TOKEN` (requires admin auth)
+2. **Create Device** → Get device details
+3. **Activate Device** → Ensure device is active
 4. **Create User** → Get `USER_ID`
-5. **Punch In** → Using `DEVICE_TOKEN` and `USER_ID`
-6. **Punch Out** → Close the punch session
+5. **Punch In (Kiosk)** → Using `USER_ID` and `DEVICE_ID`
+6. **Punch Out (Kiosk)** → Close the punch session
 
 ### Postman Variables
 
 Create these variables in Postman:
 - `BASE_URL`: `http://localhost:3000`
 - `ADMIN_TOKEN`: From admin login response
-- `ACTIVATION_CODE`: From device creation response
-- `DEVICE_TOKEN`: From device activation response
 - `USER_ID`: From user creation response
+- `DEVICE_ID`: From device creation response (optional, for kiosk mode)
 
 ---
 
@@ -493,17 +557,20 @@ Create these variables in Postman:
 ### Authentication Boundaries
 
 - **Admin APIs** require `Authorization: Bearer {{ADMIN_TOKEN}}`
-- **Device APIs** require `X-Device-Token: {{DEVICE_TOKEN}}`
-- **Cross-authentication fails**:
-  - Using admin token on punch endpoints → 401 Unauthorized
-  - Using device token on admin endpoints → 401 Unauthorized
+- **Punch APIs** do not require authentication (open endpoints)
+  - Mode is automatically determined by presence of `deviceId`
+  - Kiosk mode: includes `deviceId` in request
+  - Remote mode: omits `deviceId` from request
 
 ### Business Logic Validation
 
-- **Device must be active** for punch operations
-- **User must be ACTIVE** for punch operations
-- **No duplicate punch in** (user cannot have open punch session)
+- **User must be ACTIVE** for all punch operations
+- **Device must be active** (only validated when `deviceId` is provided in kiosk mode)
+- **No duplicate punch in** (user cannot have multiple open punch sessions)
 - **Punch out requires open punch session**
+- **Mode detection**: Automatically set based on `deviceId` presence
+  - With `deviceId` → KIOSK mode
+  - Without `deviceId` → REMOTE mode
 
 ---
 
@@ -536,7 +603,7 @@ Create these variables in Postman:
 #### punchRecords
 - `id` (SERIAL PRIMARY KEY)
 - `userId` (INTEGER REFERENCES user)
-- `deviceId` (INTEGER REFERENCES device)
+- `deviceId` (INTEGER REFERENCES device) - **NULLABLE** (NULL for remote punches)
 - `punchInAt` (TIMESTAMP)
 - `punchOutAt` (TIMESTAMP)
 - `durationMinutes` (GENERATED)
@@ -586,10 +653,16 @@ GET /api/test
 
 ## Notes
 
-- Device tokens are long-lived (365 days)
+- **Punch endpoints do not require authentication** - simplified for face API integration
+- **Device tokens removed** - devices no longer use JWT authentication
+- **Kiosk configuration**: Store device `id` in kiosk app settings (hardcoded/configured)
 - Admin tokens expire in 24 hours
 - Activation codes expire in 24 hours and are single-use
 - Activation codes are automatically generated when creating a device
+- **Mode detection is automatic**:
+  - Request with `deviceId` → KIOSK mode (validates device)
+  - Request without `deviceId` → REMOTE mode (deviceId stored as NULL)
 - All timestamps are in UTC
 - Database uses PostgreSQL (Neon cloud database)
 - Server runs on port 3000 by default
+- **Future enhancement**: Face verification API will replace `userId` parameter
