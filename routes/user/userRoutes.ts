@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../../config/database';
 import authenticateAdmin from '../../middleware/adminAuth';
 
-const router = Router();
+const router: Router = Router();
 
 interface User {
   id?: number;

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import pool from '../../config/database';
 
-const router = Router();
+const router: Router = Router();
 
 interface PunchInRequest {
   userId: number;

@@ -3,7 +3,7 @@ import pool from '../../config/database';
 import authenticateAdmin from '../../middleware/adminAuth';
 import crypto from 'crypto';
 
-const router = Router();
+const router: Router = Router();
 
 interface Device {
   id?: number;

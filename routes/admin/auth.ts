@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import pool from '../../config/database';
 import JWT_SECRET from '../../config/jwt';
 
-const router = Router();
+const router: Router = Router();
 
 interface AdminLoginRequest {
   email: string;
