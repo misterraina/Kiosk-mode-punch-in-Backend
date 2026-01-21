@@ -10,7 +10,7 @@ import deviceRoutes from './routes/device/deviceRoutes';
 import punchRoutes from './routes/punch/punchRoutes';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4040;
 
 // Test database connection
 pool.connect((err: any, client: any, release: any) => {
