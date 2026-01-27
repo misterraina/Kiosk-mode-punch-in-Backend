@@ -1,15 +1,16 @@
 import { Router, Request, Response } from 'express';
 import pool from '../../config/database';
 import authenticateAdmin from '../../middleware/adminAuth';
+import axios from 'axios';
 
 const router: Router = Router();
 
 interface User {
-  id?: number;
-  employeeCode: string;
-  name: string;
-  status?: string;
-  faceProfileId?: string;
+    id?: number;
+    employeeCode: string;
+    name: string;
+    status?: string;
+    faceProfileId?: string;
 }
 
 // Create user (admin only)
@@ -73,6 +74,54 @@ router.get('/', authenticateAdmin, async (req: Request, res: Response) => {
             limit: parseInt(limit as string)
         });
     } catch (error: any) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get attendance logs for a user (admin only)
+router.get('/:employeeCode/attendance', authenticateAdmin, async (req: Request, res: Response) => {
+    try {
+        const { employeeCode } = req.params;
+        const { limit = 50, offset = 0 } = req.query;
+        const requestId = `req_${Date.now()}`;
+
+        console.log(`Fetching attendance logs for ${employeeCode} with requestId ${requestId}`);
+
+        const response = await axios.get('https://api.automica.ai/v1/attendance/logs', {
+            params: {
+                request_id: requestId,
+                employee_id: employeeCode,
+                limit,
+                offset
+            }
+        });
+
+        let logsArray = [];
+        if (response.data) {
+            if (Array.isArray(response.data.items)) {
+                logsArray = response.data.items;
+            } else if (Array.isArray(response.data.logs)) {
+                logsArray = response.data.logs;
+            } else if (response.data.logs && Array.isArray(response.data.logs.logs)) {
+                logsArray = response.data.logs.logs;
+            } else if (Array.isArray(response.data)) {
+                logsArray = response.data;
+            }
+        }
+
+        res.json({
+            success: true,
+            logs: logsArray,
+            requestId: requestId
+        });
+    } catch (error: any) {
+        console.error('Error fetching attendance logs:', error.message);
+        if (error.response) {
+            return res.status(error.response.status).json({
+                error: 'External API error',
+                details: error.response.data
+            });
+        }
         res.status(500).json({ error: 'Internal server error' });
     }
 });
