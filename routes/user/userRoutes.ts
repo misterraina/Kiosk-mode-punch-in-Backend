@@ -19,7 +19,7 @@ router.post('/', authenticateAdmin, async (req: Request, res: Response) => {
 
         // Check if employee code already exists
         const existingUser = await pool.query(
-            'SELECT id FROM "user" WHERE employeeCode = $1',
+            'SELECT id FROM "user" WHERE employeecode = $1',
             [employeeCode]
         );
 
@@ -28,11 +28,15 @@ router.post('/', authenticateAdmin, async (req: Request, res: Response) => {
         }
 
         const result = await pool.query(
-            'INSERT INTO "user" (employeeCode, name, status, faceProfileId) VALUES ($1, $2, $3, $4) RETURNING *',
+            'INSERT INTO "user" (employeecode, name, status, faceprofileid) VALUES ($1, $2, $3, $4) RETURNING id, employeecode as "employeeCode", name, status, faceprofileid as "faceProfileId", createdat as "createdAt"',
             [employeeCode, name, status, faceProfileId]
         );
 
-        res.status(201).json(result.rows[0]);
+        res.status(201).json({
+            success: true,
+            user: result.rows[0],
+            message: 'User created successfully'
+        });
     } catch (error: any) {
         res.status(500).json({ error: 'Internal server error' });
     }
@@ -44,7 +48,7 @@ router.get('/', authenticateAdmin, async (req: Request, res: Response) => {
         const { page = 1, limit = 10, status } = req.query;
         const offset = (Number(page) - 1) * Number(limit);
 
-        let query = 'SELECT * FROM "user"';
+        let query = 'SELECT id, employeecode as "employeeCode", name, status, faceprofileid as "faceProfileId", createdat as "createdAt" FROM "user"';
         let countQuery = 'SELECT COUNT(*) FROM "user"';
         const params: any[] = [];
 
@@ -67,6 +71,29 @@ router.get('/', authenticateAdmin, async (req: Request, res: Response) => {
             total: parseInt(countResult.rows[0].count),
             page: parseInt(page as string),
             limit: parseInt(limit as string)
+        });
+    } catch (error: any) {
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get user by employeeCode (public - used by face recognition)
+router.get('/by-employee-code/:employeeCode', async (req: Request, res: Response) => {
+    try {
+        const { employeeCode } = req.params;
+
+        const result = await pool.query(
+            'SELECT id, employeecode as "employeeCode", name, status, faceprofileid as "faceProfileId", createdat as "createdAt" FROM "user" WHERE employeecode = $1',
+            [employeeCode]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({
+            success: true,
+            user: result.rows[0]
         });
     } catch (error: any) {
         res.status(500).json({ error: 'Internal server error' });

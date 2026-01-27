@@ -8,6 +8,7 @@ import adminAuthRoutes from './routes/admin/auth';
 import userRoutes from './routes/user/userRoutes';
 import deviceRoutes from './routes/device/deviceRoutes';
 import punchRoutes from './routes/punch/punchRoutes';
+import faceRoutes from './routes/face/faceRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 4040;
@@ -24,7 +25,8 @@ pool.connect((err: any, client: any, release: any) => {
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Request logging middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -39,8 +41,10 @@ app.use('/api/admin', adminAuthRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/punch', punchRoutes);
+app.use('/api/face', faceRoutes);
 console.log('Device routes mounted at /api/devices');
 console.log('Punch routes mounted at /api/punch');
+console.log('Face routes mounted at /api/face');
 
 // Simple test route
 app.get('/api/test', (req: Request, res: Response) => {
