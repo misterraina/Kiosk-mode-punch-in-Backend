@@ -3,7 +3,7 @@ import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../../config/database';
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 const AUTOMICA_DEVICE_ID = process.env.AUTOMICA_DEVICE_ID || 'android_001';
 const AUTOMICA_DEVICE_SECRET = process.env.AUTOMICA_DEVICE_SECRET || 'secret_123';
